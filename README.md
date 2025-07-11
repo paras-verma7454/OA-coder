@@ -1,6 +1,8 @@
 # OA Coder
 
 OA Coder is an Electron application that captures screenshots and leverages the Gemini API to analyze them. It can solve questions, generate code, or provide detailed answers based on screenshots. The app supports both single screenshot processing and multi-page mode for capturing multiple images before analysis.
+Original repo: https://github.com/archangel0x01/oa-coder
+I have made my own changes and reuploaded here 
 
 ## Features
 
