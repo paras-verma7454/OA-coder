@@ -195,11 +195,10 @@
       color: #222;
       border: 1px solid #bbb;
       border-radius: 6px;
-      min-width: 170px;
-      padding: 4px 32px 4px 10px;
+      min-width: 110px;
+      padding: 2px 18px 2px 7px;
       position: relative;
-      cursor: default;
-      font-size: 15px;
+      font-size: 13px;
       outline: none;
       box-shadow: 0 1px 4px rgba(30,34,90,0.08);
       user-select: none;
@@ -231,7 +230,6 @@
     }
     #custom-dropdown-list div {
       padding: 8px 10px;
-      cursor: default;
     }
     #custom-dropdown-list div:hover {
       background: #f0f0f0;
@@ -240,7 +238,7 @@
 </head>
 <body>
   <div id="instruction-banner"></div>
-  <div id="custom-dropdown-container" style="position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:10000;">
+  <div id="custom-dropdown-container" style="position:fixed;top:50px;left:70%;transform:translateX(-50%);z-index:10000;">
     <span id="custom-dropdown-label">Show:</span>
     <div id="custom-dropdown" tabindex="0">
       <span id="custom-dropdown-selected">Code + Explanation</span>
@@ -255,6 +253,10 @@
   <div id="response-overlay">
     <div id="response-box"></div>
   </div>
+  <form id="custom-request-form" style="display:flex;gap:8px;margin:130px auto 0 auto;max-width:900px; position:relative; z-index:10001;">
+    <input id="custom-request-input" type="text" placeholder="Extra instructions for the AI (optional)" style="width:100%;max-width:200px;padding:3px 6px;border-radius:6px;border:1px solid #bbb;font-size:13px;outline:none;cursor:text;" autocomplete="off" />
+    <button id="custom-request-send" type="submit" style="padding:7px 14px;border-radius:6px;background:#1e225a;color:#fff;border:none;font-size:13px;">Send</button>
+  </form>
 
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script>
@@ -355,7 +357,11 @@
       const dropdown = document.getElementById('custom-dropdown');
       const list = document.getElementById('custom-dropdown-list');
       const selected = document.getElementById('custom-dropdown-selected');
-      let value = 'both';
+      // Restore value from localStorage if present
+      let value = localStorage.getItem('oa-coder-response-type') || 'both';
+      // Set initial UI
+      const initialOption = list.querySelector(`div[data-value="${value}"]`);
+      if (initialOption) selected.textContent = initialOption.textContent;
 
       dropdown.addEventListener('click', function(e) {
         list.style.display = list.style.display === 'block' ? 'none' : 'block';
@@ -368,12 +374,61 @@
           value = this.getAttribute('data-value');
           selected.textContent = this.textContent;
           list.style.display = 'none';
+          // Save to localStorage
+          localStorage.setItem('oa-coder-response-type', value);
         });
       });
 
       // Replace getResponseType to use this value
       window.getResponseType = function() { return value; };
     })();
+
+    let lastAIAnswer = '';
+    let pendingExtraInstructions = '';
+
+    // Provide a function to get extra instructions for the main process
+    window.getExtraInstructions = function() {
+      // After screenshot, clear pendingExtraInstructions so it is not reused
+      const instr = pendingExtraInstructions;
+      console.log('[OA-Coder] getExtraInstructions called, returning:', instr);
+      pendingExtraInstructions = '';
+      return instr;
+    };
+
+    // Track last AI answer
+    ipcRenderer.on('analysis-result', (event, result) => {
+      lastAIAnswer = result;
+      document.getElementById('custom-request-input').value = '';
+    });
+
+    // Handle input box submit for follow-up or storing extra instructions
+    document.getElementById('custom-request-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const input = document.getElementById('custom-request-input');
+      const text = input.value.trim();
+      if (!text) return;
+      if (lastAIAnswer) {
+        // After first AI response: send as follow-up, include response type
+        document.getElementById('response-box').innerHTML = '<div style="color:#fff;font-size:17px;">Loading...</div>';
+        const responseType = window.getResponseType ? window.getResponseType() : 'both';
+        ipcRenderer.send('custom-followup', { text, context: lastAIAnswer, responseType });
+        input.value = '';
+      } else {
+        // Before any AI response: store as extra instructions for next screenshot
+        pendingExtraInstructions = text;
+        input.value = '';
+        // Do NOT send to AI yet; will be included with next screenshot
+      }
+    });
+
+    // Listen for AI follow-up answer and update lastAIAnswer
+    ipcRenderer.on('custom-followup-result', (event, result) => {
+      lastAIAnswer = result;
+      // Show in main response area
+      document.getElementById('response-box').innerHTML = marked.parse(result);
+      document.getElementById('custom-request-input').value = '';
+      colorizeComments(); // Ensure comments are green after follow-up
+    });
   </script>
 </body>
 </html>

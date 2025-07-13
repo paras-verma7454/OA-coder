@@ -104,11 +104,21 @@ async function processScreenshots() {
   try {
     let prompt;
     if (responseType === 'code') {
-      prompt = "This is a data structures and algorithms (DSA) question. Please provide only the final code (C++) and use #include <bits/stdc++.h> and using namespace std;. Do not include any explanation and comments, just the code.";
+      prompt = "This is a data structures and algorithms (DSA) question. Please provide only the final code (C++) and use #include <bits/stdc++.h> and using namespace std;. Do not include any explanation, just the code with comments.";
     } else if (responseType === 'explanation') {
-      prompt = "This is a data structures and algorithms (DSA) question. Please provide only the explanation and approach, including time and space complexity like you would explain to an interviewer, but do not include any code.";
+      prompt = "This is a data structures and algorithms (DSA) question. Please provide only the explanation and approach, including time and space complexity like a interviewer would love to listen and keep it concise and in points, but do not include any code.";
     } else {
-      prompt = "This is a data structures and algorithms (DSA) question. Please provide a detailed solution, including the final code (C++) and use #include <bits/stdc++.h> and using namespace std;, and the time and space complexity but don't explain the time and space complexity in the code. If possible, include comments in the code and a concise summary of the approach.";
+      prompt = "This is a data structures and algorithms (DSA) question. Please provide a detailed solution like a interviewer would love to listen and keep it concise and in points, including the final code (C++) and use #include <bits/stdc++.h> and using namespace std;, and the time and space complexity but don't explain the time and space complexity in the code. If possible, include comments in the code and a concise summary of the approach and provide both brute force and optimal approach code.";
+    }
+
+    // Get extra instructions from renderer
+    let extraInstructions = '';
+    if (mainWindow && mainWindow.webContents) {
+      extraInstructions = await mainWindow.webContents.executeJavaScript('window.getExtraInstructions && window.getExtraInstructions()');
+    }
+    if (extraInstructions) {
+      prompt += "\n\nUser extra instructions: " + extraInstructions;
+      console.log('[OA-Coder] extraInstructions:', extraInstructions);
     }
 
     // Format image parts
@@ -284,5 +294,40 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
+  }
+});
+
+// Restore custom-followup IPC logic for follow-up requests
+ipcMain.on('custom-followup', async (event, { text, context, responseType }) => {
+  try {
+    // Compose prompt with responseType
+    let prompt;
+    if (responseType === 'code') {
+      prompt = "This is a data structures and algorithms (DSA) question. Please provide only the final code (C++) and use #include <bits/stdc++.h> and using namespace std;. Do not include any explanation , just the code and comments.";
+    } else if (responseType === 'explanation') {
+      prompt = "This is a data structures and algorithms (DSA) question. Please provide only the explanation and approach, including time and space complexity like you an interviewer want to listen and keep it concise and in points, but do not include any code.";
+    } else {
+      prompt = "This is a data structures and algorithms (DSA) question. Please provide a detailed solution, including the final code (C++) and use #include <bits/stdc++.h> and using namespace std;, and the time and space complexity but don't explain the time and space complexity in the code. If possible, include comments in the code and a concise summary of the approach.";
+    }
+    if (context && context.trim()) {
+      prompt += `\n\nPrevious AI answer (context):\n${context}\n\nUser follow-up/request: ${text}`;
+    } else {
+      prompt += `\n\nUser follow-up/request: ${text}`;
+    }
+    const response = await ai.models.generateContent({
+      model: config.model,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt }
+          ]
+        }
+      ]
+    });
+    const resultText = response.text || 'No response from Gemini.';
+    event.sender.send('custom-followup-result', resultText);
+  } catch (err) {
+    event.sender.send('custom-followup-result', `Error: ${err.message}`);
   }
 });

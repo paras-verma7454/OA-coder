@@ -10,7 +10,6 @@
     "axios": "^1.10.0",
     "electron": "^28.1.0",
     "node-fetch": "^3.3.2",
-    "openai": "^4.24.1",
     "screenshot-desktop": "^1.15.0"
   }
 }
